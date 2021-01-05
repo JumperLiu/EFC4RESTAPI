@@ -33,13 +33,25 @@ namespace EFC4RESTAPI.Services
             }
         }
         private static async Task<Tuple<bool, string>> EditManyAsync<T>(this AppDBContext db, DbSet<T> sets, EditType type = EditType.Add,
-                                                                        IEnumerable<T> entities = null, IEnumerable<Guid> ids = null) where T : ISuper
+                                                                        IEnumerable<T> entities = null, IEnumerable<Guid> ids = null,
+                                                                        IEnumerable<Tuple<Guid, T>> ids_entities = null) where T : ISuper
         {
             var trans = await db.Database.BeginTransactionAsync();
             var title = type.GetTitle();
-            var es = type != EditType.Remove ? entities : await sets.GetListAsync<T>(i => ids.Contains(i.Id));
             try
             {
+                IEnumerable<T> es = new List<T>();
+                switch (type)
+                {
+                    case EditType.Add: es = entities; break;
+                    case EditType.Modify:
+                        foreach (var ie in ids_entities)
+                        {
+                            if (await sets.GetOneAsync(ie.Item1) != null) es.Append(ie.Item2);
+                        }
+                        break;
+                    case EditType.Remove: es = await sets.GetListAsync<T>(i => ids.Contains(i.Id)); break;
+                }
                 sets.EditDo<T>(type, es, true);
                 await db.SaveChangesAsync();
                 List<Guid> success = new();
@@ -52,7 +64,7 @@ namespace EFC4RESTAPI.Services
                         case EditType.Remove: if ((await sets.Where(j => j.Id == i.Id).FirstOrDefaultAsync()) == null) success.Add(i.Id); break;
                     }
                 }
-                var check = success.Count == (type == EditType.Add ? entities.Count() : ids.Count());
+                var check = success.Count == (type == EditType.Add ? entities.Count() : (type == EditType.Modify ? ids_entities.Count() : ids.Count()));
                 return await trans.TransactionAsync(check, $"{title}{(check ? "" : "失败，数据回滚操作")}成功！");
             }
             catch (Exception) { return await trans.TransactionAsync(false, $"{title}失败，数据回滚操作成功！"); }
@@ -85,8 +97,8 @@ namespace EFC4RESTAPI.Services
         => await db.EditOneAsync(sets, EditType.Remove, id: id);
         public static async Task<Tuple<bool, string>> AddManyAsync<T>(this AppDBContext db, DbSet<T> sets, IEnumerable<T> entities) where T : ISuper
         => await db.EditManyAsync(sets, EditType.Add, entities);
-        public static async Task<Tuple<bool, string>> ModifyManyAsync<T>(this AppDBContext db, DbSet<T> sets, IEnumerable<T> entities, IEnumerable<Guid> ids) where T : ISuper
-        => await db.EditManyAsync(sets, EditType.Modify, entities, ids);
+        public static async Task<Tuple<bool, string>> ModifyManyAsync<T>(this AppDBContext db, DbSet<T> sets, IEnumerable<Tuple<Guid, T>> ids_entities) where T : ISuper
+        => await db.EditManyAsync(sets, EditType.Modify, ids_entities: ids_entities);
         public static async Task<Tuple<bool, string>> RemoveManyAsync<T>(this AppDBContext db, DbSet<T> sets, IEnumerable<Guid> ids) where T : ISuper
         => await db.EditManyAsync(sets, EditType.Remove, ids: ids);
     }
