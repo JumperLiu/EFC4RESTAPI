@@ -12,6 +12,7 @@
                 .EnableSensitiveDataLogging()
                 .EnableDetailedErrors()
             );
+        services.AddScoped<IDBContext, EFCRepository>();
 ~~~
 
 # 2、新增MySQL数据库上下文对象构造函数：(AppDBContext.cs)
