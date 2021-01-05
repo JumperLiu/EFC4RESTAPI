@@ -19,7 +19,10 @@ namespace EFC4RESTAPI.Repositories
         public DbSet<T> Sets<T>() where T : ISuper => _tables<T>()[typeof(T).Name];
         public AppDBContext(DbContextOptions<AppDBContext> options) : base(options)
         {
+            // Create database table object
             Database.EnsureCreated();
+            // Delete database table object
+            // Database.EnsureDeleted();
         }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
